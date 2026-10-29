@@ -29,7 +29,8 @@ function sidecarOn() { const c = sidecarCfg(); return c.enabled && c.url && c.to
 async function sidecarCall(method, path, body = null, timeout = 30000) {
   const c = sidecarCfg();
   if (!c.url || !c.token) throw new Error('sidecar not configured');
-  const url = new URL(path, c.url.replace(/\/$/, '') + '/');
+  const base = c.url.replace(/\/$/, '') + '/';
+  const url = new URL(path.replace(/^\//, ''), base);
   const init = { method, headers: { Authorization: `Bearer ${c.token}`, Accept: 'application/json' } };
   if (body) { init.headers['Content-Type'] = 'application/json'; init.body = JSON.stringify(body); }
   const ctrl = new AbortController();
@@ -58,17 +59,26 @@ const sidecarVault = {
   },
   async file(path) {
     const j = await sidecarCall('GET', `/v1/vault/file?path=${encodeURIComponent(path)}`, null, 10000);
-    return j?.text ?? j?.content ?? null;
+    return j?.content ?? j?.text ?? null;
   },
   async raw(path) {
     const j = await sidecarCall('GET', `/v1/vault/raw?path=${encodeURIComponent(path)}`, null, 10000);
     return j?.data ?? null; // base64 or bytes, decoded by caller
   },
   async write(path, content) {
-    return await sidecarCall('POST', '/v1/vault/write', { path, content }, 10000);
+    return await sidecarCall('PUT', '/v1/vault/file', { path, content }, 10000);
+  },
+  async mkdir(path) {
+    return await sidecarCall('POST', '/v1/vault/mkdir', { path }, 10000);
+  },
+  async move(fromPath, toPath) {
+    return await sidecarCall('POST', '/v1/vault/move', { from: fromPath, to: toPath }, 10000);
+  },
+  async delete(path) {
+    return await sidecarCall('DELETE', `/v1/vault/file?path=${encodeURIComponent(path)}`, null, 10000);
   },
   async search(query, limit = 20) {
-    return await sidecarCall('GET', `/v1/vault/search?query=${encodeURIComponent(query)}&limit=${limit}`, null, 15000);
+    return await sidecarCall('GET', `/v1/vault/search?q=${encodeURIComponent(query)}&limit=${limit}`, null, 15000);
   },
 };
 
