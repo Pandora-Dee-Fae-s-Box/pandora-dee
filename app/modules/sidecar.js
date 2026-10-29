@@ -1,6 +1,7 @@
 /* =====================================================================
    SIDECAR — pandora-dee offloads heavy, persistent, or missing work to jade-py.
-   Config: S.sidecar { enabled, url, token, mode: 'off'|'assistant'|'full' }
+   Config (flat keys, like apiOn/apiPort): S.sidecarEnabled, S.sidecarUrl,
+   S.sidecarToken, S.sidecarMode ('off'|'assistant'|'full')
    Transport: HTTP API with Bearer token, reusing jade-py's /v1/* routes.
    The sidecar owns the vault on its host; this body keeps a read cache.
    ===================================================================== */
@@ -12,15 +13,18 @@ function sidecarDefault() {
   return { enabled: false, url: 'http://127.0.0.1:8760', token: '', mode: 'assistant' };
 }
 function sidecarCfg() {
-  S.sidecar ||= sidecarDefault();
-  if (!SIDECAR_MODES.includes(S.sidecar.mode)) S.sidecar.mode = 'assistant';
-  return S.sidecar;
+  return {
+    enabled: !!S.sidecarEnabled,
+    url: String(S.sidecarUrl || 'http://127.0.0.1:8760').trim(),
+    token: String(S.sidecarToken || '').trim(),
+    mode: SIDECAR_MODES.includes(S.sidecarMode) ? S.sidecarMode : 'assistant',
+  };
 }
 function sidecarGenToken() {
   const b = new Uint8Array(18); (globalThis.crypto || window.crypto).getRandomValues(b);
   return 'jv_' + [...b].map(x => x.toString(16).padStart(2, '0')).join('');
 }
-function sidecarOn() { const c = sidecarCfg(); return !!c.enabled && !!c.url && !!c.token; }
+function sidecarOn() { const c = sidecarCfg(); return c.enabled && c.url && c.token; }
 
 async function sidecarCall(method, path, body = null, timeout = 30000) {
   const c = sidecarCfg();
@@ -76,7 +80,7 @@ function sidecarCan(tool) {
   if (c.mode !== 'assistant') return false;
   // assistant mode offloads tools the browser body cannot do well
   const offload = new Set(['vector', 'discord', 'ssh', 'browser', 'schedule', 'ritual', 'flow']);
-  for (const p of ['mcp__']) if (tool.startsWith(p)) return true;
+  if (tool.startsWith('mcp__')) return true;
   return offload.has(tool);
 }
 
@@ -91,10 +95,10 @@ async function sidecarChat(message, opts = {}) {
 /* ---------- settings UI ---------- */
 function renderSidecarSettings() {
   const c = sidecarCfg();
-  $('#sSidecarOn').checked = !!c.enabled;
-  $('#sSidecarUrl').value = c.url || '';
-  $('#sSidecarToken').value = c.token || '';
-  $('#sSidecarMode').value = c.mode || 'assistant';
+  $('#sSidecarOn').checked = c.enabled;
+  $('#sSidecarUrl').value = c.url;
+  $('#sSidecarToken').value = c.token;
+  $('#sSidecarMode').value = c.mode;
   $('#sidecarStatus').innerHTML = sidecarStatusHtml();
 }
 function sidecarStatusHtml() {
@@ -104,12 +108,12 @@ function sidecarStatusHtml() {
   return '<span class="dot busy"></span>Pinging…';
 }
 function sidecarReadFields() {
-  const c = sidecarCfg();
-  c.enabled = $('#sSidecarOn').checked;
-  c.url = ($('#sSidecarUrl').value || '').trim();
-  c.token = $('#sSidecarToken').value.trim();
-  c.mode = SIDECAR_MODES.includes($('#sSidecarMode').value) ? $('#sSidecarMode').value : 'assistant';
-  return { sidecar: c };
+  return {
+    sidecarEnabled: $('#sSidecarOn').checked,
+    sidecarUrl: ($('#sSidecarUrl').value || '').trim(),
+    sidecarToken: $('#sSidecarToken').value.trim(),
+    sidecarMode: SIDECAR_MODES.includes($('#sSidecarMode').value) ? $('#sSidecarMode').value : 'assistant',
+  };
 }
 $('#btnSidecarToken').onclick = () => { $('#sSidecarToken').value = sidecarGenToken(); };
 $('#btnSidecarCopy').onclick = async () => { try { await navigator.clipboard.writeText($('#sSidecarToken').value); toast('Token copied'); } catch { $('#sSidecarToken').select(); toast('Select and copy the token', 'err'); } };
@@ -118,8 +122,10 @@ $('#btnSidecarPing').onclick = async () => { await sidecarPing(); renderSidecarS
 // ping when settings open, and when enabled changes
 let sidecarPingT = 0;
 function sidecarTick() {
-  const c = sidecarCfg();
-  if (!c.enabled) return;
-  if (Date.now() - sidecarPingT > 60000) { sidecarPingT = Date.now(); sidecarPing().then(() => { try { renderSidecarSettings(); } catch {} }); }
+  if (!sidecarCfg().enabled) return;
+  if (Date.now() - sidecarPingT > 60000) {
+    sidecarPingT = Date.now();
+    sidecarPing().then(() => { try { renderSidecarSettings(); } catch {} });
+  }
 }
 setInterval(sidecarTick, 30000);
