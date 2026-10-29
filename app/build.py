@@ -1445,7 +1445,7 @@ rep("function newSession() { if (cur?.messages?.length) journalSession(cur);", "
 rep("async function openSession(id) { if (cur?.messages?.length && cur.id !== id) journalSession(cur);", "async function openSession(id) { if (cur?.id !== id) saveSession.flush?.(); if (cur?.messages?.length && cur.id !== id) journalSession(cur);")
 
 # ---------- v17: HTTP API (Android app) + settings tabs ----------
-rep("const DEFAULTS = { provider: 'local',", "const DEFAULTS = { apiOn: false, apiPort: 8787, apiLan: false, apiToken: '', provider: 'local',")
+rep("const DEFAULTS = { provider: 'local',", "const DEFAULTS = { sidecarEnabled: false, sidecarUrl: 'http://127.0.0.1:8760', sidecarToken: '', sidecarMode: 'assistant', apiOn: false, apiPort: 8787, apiLan: false, apiToken: '', provider: 'local',")
 API_HTML = r"""      <section class="flex flex-col gap-3" id="apiSection">
         <div class="pane-h">API endpoint</div>
         <p class="text-sm leading-relaxed text-[#c2d6ce]">Let other apps and scripts talk to Pandora. They send a GET request and get JSON back. A message sent this way goes through the normal chat: it appears in the app and Pandora answers there.</p>
@@ -1491,15 +1491,31 @@ Over Wi-Fi the traffic is plain HTTP, so use a trusted network.</pre></details>
       </section>
 
 """
+SIDECAR_HTML = r"""      <section class="flex flex-col gap-3" id="sidecarSection" data-tab="connect">
+        <div class="pane-h">Sidecar</div>
+        <p class="text-sm leading-relaxed text-[#c2d6ce]">Offload heavy or persistent work to a jade-py server running on this device, your network, or a VPS. The sidecar keeps the same vault and can reach bridges that do not run in a browser.</p>
+        <label class="flex items-center gap-2 text-sm" for="sSidecarOn"><input type="checkbox" id="sSidecarOn" class="accent-emerald-400 w-4 h-4"> Enable sidecar</label>
+        <div class="grid gap-3" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+          <div><label class="lbl" for="sSidecarUrl">Sidecar URL</label><input id="sSidecarUrl" class="field mt-1" placeholder="http://127.0.0.1:8760" autocapitalize="off" autocorrect="off" spellcheck="false"></div>
+          <div><label class="lbl" for="sSidecarMode">Mode</label><select id="sSidecarMode" class="field mt-1"><option value="assistant">Assistant (offload selected tools)</option><option value="full">Full (sidecar owns the runtime)</option></select></div>
+        </div>
+        <div><label class="lbl" for="sSidecarToken">Access token</label>
+          <div class="flex gap-2 mt-1"><input id="sSidecarToken" class="field" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="jv_…"><button type="button" class="btn" id="btnSidecarCopy">Copy</button><button type="button" class="btn btn-ghost" id="btnSidecarToken">New</button><button type="button" class="btn btn-ghost" id="btnSidecarPing">Ping</button></div></div>
+        <div class="text-sm flex items-center gap-2 flex-wrap" id="sidecarStatus"></div>
+        <p class="hint leading-relaxed">The token must match the one set on the sidecar. Keep this on a trusted network; for a VPS use HTTPS or a private tunnel.</p>
+      </section>
+
+"""
 VS = '      <section class="flex flex-col gap-3" id="vecSection">'
-rep(VS, API_HTML + VS)
-rep("  renderSkillsSettings(); renderBgSettings();", "  renderSkillsSettings(); renderBgSettings(); renderApiSettings(); initSettingsTabs();")
-rep("bgMode: $('#sBgMode').value, bgNotify: $('#sBgNotify').checked });", "bgMode: $('#sBgMode').value, bgNotify: $('#sBgNotify').checked, ...apiReadFields() });")
+rep(VS, API_HTML + SIDECAR_HTML + VS)
+rep("  renderSkillsSettings(); renderBgSettings();", "  renderSkillsSettings(); renderBgSettings(); renderApiSettings(); renderSidecarSettings(); initSettingsTabs();")
+rep("bgMode: $('#sBgMode').value, bgNotify: $('#sBgNotify').checked });", "bgMode: $('#sBgMode').value, bgNotify: $('#sBgNotify').checked, ...apiReadFields(), ...sidecarReadFields() });")
 rep("  saveSettings(); bgSync(); setVoice($('#sJadeVoice').checked);", "  saveSettings(); apiApply(); bgSync(); setVoice($('#sJadeVoice').checked);")
 rep("  const want = S.bgMode === 'always' || (S.bgMode !== 'off' && (running || vecOnline));", "  const apiUp = !!(S.apiOn && apiState?.listening);\n  const want = apiUp || S.bgMode === 'always' || (S.bgMode !== 'off' && (running || vecOnline));")
 rep("vecOnline ? 'Pandora is online on Vector' :", "vecOnline ? 'Pandora is online on Vector' : apiUp ? `Pandora's API on port ${apiState.port}` :")
 rep("  bgSync();\n  setTab('chat');\n})();", "  apiApply();\n  bgSync();\n  setTab('chat');\n})();")
 s = s.replace('/* =====================================================================\n   BOOT', rd('api.js') + '\n' + '/* =====================================================================\n   BOOT', 1)
+s = s.replace('/* =====================================================================\n   BOOT', rd('sidecar.js') + '\n' + '/* =====================================================================\n   BOOT', 1)
 
 for sec_id in ('trajSection', 'vecSection', 'mcpSection'):
     rep(f"setTimeout(() => $('#{sec_id}').scrollIntoView({{ block: 'start' }}), 60)", f"setTimeout(() => showSettingsSection('#{sec_id}'), 60)")
@@ -1509,7 +1525,7 @@ TABS = [('model', 'Model'), ('memory', 'Memory'), ('tools', 'Tools'), ('connect'
 TAB_OF = {'Model provider': 'model', 'Web search': 'model', 'Ollaya decisions': 'model',
           'Persona, instructions & skills': 'memory', 'Long-term memory': 'memory', 'History compaction': 'memory', 'Trajectory log (fine-tuning data)': 'memory',
           'MCP servers': 'tools', 'Secrets (API keys for Jade\'s HTTP requests)': 'tools', 'BusyBox WASM': 'tools',
-          'API endpoint': 'connect', 'Vector messenger (Pandora as a bot)': 'connect', 'Discord (Pandora as a bot)': 'connect',
+          'API endpoint': 'connect', 'Sidecar': 'connect', 'Vector messenger (Pandora as a bot)': 'connect', 'Discord (Pandora as a bot)': 'connect',
           'Heartbeat': 'app', 'Background': 'app', 'Jade companion': 'app', 'Backup': 'app', 'Danger zone': 'app'}
 a = s.index('<div class="modal-bg" id="settings" hidden>'); b = s.index('<div class="flex justify-end gap-2"><button class="btn" id="btnCancel">', a)
 blk = s[a:b]; seen = set()
@@ -1673,7 +1689,7 @@ rep("  const pv = $('#notePrev'); const st = pv.scrollTop; pv.replaceChildren(el
 
 rep("  apiApply();\n  bgSync();", "  flowsInit();\n  apiApply();\n  bgSync();")
 s = s.replace('/* =====================================================================\n   BOOT', rd('bridge.js') + '\n' + rd('cron.js') + '\n' + rd('flows.js') + '\n' + rd('templates.js') + '\n/* =====================================================================\n   BOOT', 1)
-rep("Object.assign(window, { saveSettings, VEC,", "Object.assign(window, { setNoteMode, renderNotePreview, openSettings, scheduleTool, addSchedule, saveSchedules, renderSchedules, TOOL_DEFS, flowRecordsLoad, flowDelete, flowHelp, cronLog, SchedBusy, crontabShell, jadeShell, flowShell, tplBlock, tplExec, renderTplSettings, schedKindFill, flowRun, flowRunByName, flowList, flowFind, flowSave, flowValidate, flowTool, flowClean, FlowRuns, FlowTrig, flowsRender, FUI, flowNoteCheck, flowTick, flowsArm, runNodeScript, jadeBridge, decideData, askOnce, runShellLine, kvOp, jvDialog, tplHydrate, tplRender, tplCompile, tplPages, TplState, tplInsertFlow, jvDate, addScheduleKind, runScheduleKind, Sched, schedTick, saveSettings, VEC,")
+rep("Object.assign(window, { saveSettings, VEC,", "Object.assign(window, { setNoteMode, renderNotePreview, openSettings, scheduleTool, addSchedule, saveSchedules, renderSchedules, TOOL_DEFS, flowRecordsLoad, flowDelete, flowHelp, cronLog, SchedBusy, crontabShell, jadeShell, flowShell, tplBlock, tplExec, renderTplSettings, schedKindFill, flowRun, flowRunByName, flowList, flowFind, flowSave, flowValidate, flowTool, flowClean, FlowRuns, FlowTrig, flowsRender, FUI, flowNoteCheck, flowTick, flowsArm, runNodeScript, jadeBridge, decideData, askOnce, runShellLine, kvOp, jvDialog, tplHydrate, tplRender, tplCompile, tplPages, TplState, tplInsertFlow, jvDate, addScheduleKind, runScheduleKind, Sched, schedTick, sidecarCall, sidecarPing, sidecarVault, sidecarTool, sidecarChat, sidecarCan, renderSidecarSettings, sidecarReadFields, saveSettings, VEC,")
 
 # ---------- v19: reply bar under Jade's replies: Copy · 👍 · 👎 · Retry ----------
 rep("      if (m.trajId) { const w = ai.querySelector('[data-when]'); if (m.dur && w.textContent) w.textContent += ' · ' + fmtDur(m.dur); ai.appendChild(rateBar(m)); }",
