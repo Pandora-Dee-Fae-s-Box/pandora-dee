@@ -1683,8 +1683,8 @@ rep(API_SEC, """      <section data-tab="tools" class="flex flex-col gap-3" id="
       </section>
 
 """ + API_SEC)
-rep("renderApiSettings(); initSettingsTabs();", "renderApiSettings(); renderTplSettings(); initSettingsTabs();")
-rep("...apiReadFields() });", "...apiReadFields(), ...tplReadFields() });")
+rep("renderApiSettings(); renderSidecarSettings(); initSettingsTabs();", "renderApiSettings(); renderSidecarSettings(); renderTplSettings(); initSettingsTabs();")
+rep("...apiReadFields(), ...sidecarReadFields() });", "...apiReadFields(), ...sidecarReadFields(), ...tplReadFields() });")
 rep("  const pv = $('#notePrev'); const st = pv.scrollTop; pv.replaceChildren(el); pv.scrollTop = st;", "  const pv = $('#notePrev'); const st = pv.scrollTop; pv.replaceChildren(el); pv.scrollTop = st;\n  try { tplHydrate(el, editing); } catch (e) { console.warn('note scripts', e); }")
 
 rep("  apiApply();\n  bgSync();", "  flowsInit();\n  apiApply();\n  bgSync();")

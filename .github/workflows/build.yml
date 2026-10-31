@@ -13,22 +13,21 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-      - run: npm install
+          node-version: '22'
+      # build.py reads katex, marked, dompurify and pdfjs from node_modules
+      - run: npm install --no-audit --no-fund
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Check expected files
-        run: |
-          ls -la app/
-          ls -la app/base/
-          ls -la app/modules/ | head -20
-          ls -la node_modules/katex/dist/
+      # the whole web build, as ci.yml does it (jade-link.xdc first, which build.py needs, then build.py, tw.css,
+      # index.html). Its output shows in the log as it happens and goes to build.log; on a failure the end of the
+      # log (the real error, such as an anchor build.py couldn't find) is printed again at the bottom.
       - name: Build pandora-dee.html
         run: |
-          python3 -u app/build.py > build.log 2>&1 || {
-            echo "BUILD FAILED; dumping app/base/pi-netrunner-mobile.html first 200 lines for diagnostics"
-            head -n 200 app/base/pi-netrunner-mobile.html
+          set -o pipefail
+          npm run build 2>&1 | tee build.log || {
+            echo "::error::BUILD FAILED. The end of build.log:"
+            tail -n 60 build.log
             exit 1
           }
       - name: Upload build log
