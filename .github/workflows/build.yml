@@ -26,11 +26,18 @@ jobs:
           ls -la node_modules/katex/dist/
       - name: Build pandora-dee.html
         run: |
-          python3 -u app/build.py || {
+          python3 -u app/build.py > build.log 2>&1 || {
             echo "BUILD FAILED; dumping app/base/pi-netrunner-mobile.html first 200 lines for diagnostics"
             head -n 200 app/base/pi-netrunner-mobile.html
             exit 1
           }
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
