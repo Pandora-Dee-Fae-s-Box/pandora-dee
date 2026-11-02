@@ -27,8 +27,9 @@ jobs:
       - name: Build pandora-dee.html
         run: |
           python3 -u app/build.py > build.log 2>&1 || {
-            echo "BUILD FAILED; dumping app/base/pi-netrunner-mobile.html first 200 lines for diagnostics"
-            head -n 200 app/base/pi-netrunner-mobile.html
+            echo "BUILD FAILED; build.log follows:"
+            cat build.log
+            echo "--- end build.log ---"
             exit 1
           }
       - name: Upload build log
