@@ -11,6 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -19,13 +23,22 @@ jobs:
           ls -la app/
           ls -la app/base/
           ls -la app/modules/ | head -20
+          ls -la node_modules/katex/dist/
       - name: Build pandora-dee.html
         run: |
-          python3 -u app/build.py || {
-            echo "BUILD FAILED; dumping app/base/pi-netrunner-mobile.html first 200 lines for diagnostics"
-            head -n 200 app/base/pi-netrunner-mobile.html
+          npm run build > build.log 2>&1 || {
+            echo "BUILD FAILED; build.log follows:"
+            cat build.log
+            echo "--- end build.log ---"
             exit 1
           }
+      - name: Upload build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
