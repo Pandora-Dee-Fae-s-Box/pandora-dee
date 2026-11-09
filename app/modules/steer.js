@@ -156,7 +156,7 @@ function steering() {
 function steeringContext(st) {
   let out = '';
   if (st.soul) out += `\n\nYour persona (from /Pandora/SOUL.md; this is who you are, keep this voice in chat):\n${st.soul}`;
-  for (const a of st.agents) out += `\n\nStanding instructions from the user (${a.p}; always follow them):\n${a.t}`;
+  for (const a of st.agents) out += `\n\nStanding instructions (${a.p}; always follow them):\n${a.t}`;
   if (st.skills.length) out += `\n\nSkills (instruction packs in ${SKILLS_DIR}). When a request matches a skill's description, FIRST call the skill tool with its name, then follow the instructions it returns step by step:\n${st.skills.map(s => `- ${s.name}: ${s.description}`).join('\n')}\nTo create a skill, write ${SKILLS_DIR}/<kebab-name>/SKILL.md beginning with frontmatter ("---", "name: …", "description: … Use when …", "---") followed by numbered steps.`;
   return out;
 }
@@ -164,6 +164,7 @@ function skillTool(args) {
   const s = findSkill(args.name || args.skill);
   if (!s) { const all = listSkills().filter(x => !x.off); throw new Error(`No skill named "${args.name}". Available: ${all.map(x => x.name).join(', ') || 'none'}`); }
   if (s.off) throw new Error(`The skill "${s.name}" is turned off in Config.`);
+  try { if (typeof skillStat === 'function') skillStat(s.name, 'used'); } catch {}
   const { body } = parseFront(vfs.read(s.path));
   const extra = [...vfs.walk(s.dir)].filter(p => p !== s.path && vfs.isFile(p));
   return `Skill "${s.name}" loaded from ${s.path}. Follow these instructions now.${extra.length ? `\nOther files in this skill (read them when the steps refer to them): ${extra.join(', ')}` : ''}${args.input ? `\nInput: ${args.input}` : ''}\n\n${stripComments(body)}`;

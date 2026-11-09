@@ -26,12 +26,16 @@ function ctxLearn(msg, estTok) {
   const maxM = /(?:maximum context length(?: is)?|context (?:length|size|window)(?: is| of)?|n_ctx|max(?:imum)?(?: allowed)?(?: tokens)?)\D{0,24}?(\d[\d,]{2,})/i.exec(msg);
   const prM = /(?:prompt is too long|resulted in|request(?:ed)?|prompt has|prompt tokens?|input (?:is|of|length))\D{0,24}?(\d[\d,]{2,})/i.exec(msg);
   const lims = ls.get('ctxLimits', {}), rat = ls.get('ctxRatio', {}), k = ctxKey();
+  // "exceeded max context length by 15856 tokens": that number is how far over, not the limit (Ollama Cloud says it
+  // this way). The real limit is about our estimate minus that, with room to spare.
+  const overM = /(?:exceed(?:s|ed)?|over)\b[^.;\n]{0,40}?\bby\s+(\d[\d,]*)\s*tokens?/i.exec(msg);
+  if (overM && estTok) { lims[k] = Math.max(2048, Math.floor((Math.min(ctxLimit(), estTok) - num(overM[1])) * 0.9)); ls.set('ctxLimits', lims); return; }
   if (prM && estTok) { const actual = num(prM[1]); if (actual > estTok) rat[k] = Math.max(0.8, ctxRatio() * estTok / actual * 0.97); }
   if (maxM && num(maxM[1]) >= 1024) lims[k] = num(maxM[1]);
   else if (!prM) lims[k] = Math.max(2048, Math.floor(Math.min(ctxLimit(), estTok) * 0.7));   // no numbers: assume we were well over
   ls.set('ctxLimits', lims); ls.set('ctxRatio', rat);
 }
-const isCtxError = msg => /prompt is too long|maximum context length|context[_ ]length[_ ]exceeded|exceeds? (?:the )?(?:available |maximum )?context|context (?:size|window) (?:exceeded|is too small)|too many (?:input )?tokens|reduce the length of the (?:messages|prompt)|input is too long/i.test(msg);
+const isCtxError = msg => /prompt (?:is )?too long|(?:max|maximum) context length|context[_ ]length[_ ]exceeded|exceeds? (?:the )?(?:available |maximum )?context|context (?:size|window) (?:exceeded|is too small)|too many (?:input )?tokens|reduce the length of the (?:messages|prompt)|input is too long/i.test(msg);
 function clip(s, keep, why) {
   s = String(s || ''); if (s.length <= keep) return s;
   const head = Math.round(keep * 0.7), tail = keep - head;
@@ -85,13 +89,13 @@ function contextReport() {
   const R = ctxRatio(), tok = n => Math.ceil(n / R); const lim = ctxLimit();
   const sp = systemPrompt(); const st = steering(); const rows = [];
   const add = (label, chars) => { if (chars > 0) rows.push([label, tok(chars)]); };
-  const soulC = st.soul.length, agC = st.agents.reduce((a, x) => a + x.t.length, 0), skC = st.skills.reduce((a, x) => a + x.name.length + x.description.length + 4, 0);
+  const soulC = st.soul.length, agC = st.agents.reduce((a, x) => a + x.t.length, 0), skC = (typeof skillLines === 'function' ? skillLines(st.skills).length : st.skills.reduce((a, x) => a + x.name.length + x.description.length + 4, 0));
   const memC = memoryContext().length, mcpC = mcpPromptBlock().length, custom = st.system.length;
   add(custom ? 'Custom system prompt (/Pandora/SYSTEM.md)' : 'Built-in instructions', sp.length - soulC - agC - skC - memC - mcpC);
   add('SOUL.md persona', soulC); for (const a of st.agents) add(`AGENTS: ${a.p}`, a.t.length); add(`Skills list (${st.skills.length})`, skC);
   add('Memory + journal', memC); add('MCP server list', mcpC);
-  const tools = activeTools(); const builtin = tools.filter(t => !mcpHandles(t.function.name) && !/^mcp__/.test(t.function.name));
-  add(`Built-in tools (${builtin.length})`, toolsChars(builtin));
+  const all = activeTools(), tools = typeof routeTools === 'function' ? routeTools(all) : all; const builtin = tools.filter(t => !mcpHandles(t.function.name) && !/^mcp__/.test(t.function.name));
+  add(`Built-in tools (${builtin.length}${all.length > tools.length ? ' sent of ' + all.filter(t => !mcpHandles(t.function.name) && !/^mcp__/.test(t.function.name)).length : ''})`, toolsChars(builtin));
   const bySrv = {}; for (const t of tools) if (!builtin.includes(t)) { const s = /^mcp__([^_]+(?:_[^_]+)*?)__/.exec(t.function.name)?.[1] || 'mcp helpers'; bySrv[s] = (bySrv[s] || 0) + JSON.stringify(t).length; }
   for (const [s, c] of Object.entries(bySrv)) add(`MCP tools: ${s}`, c);
   const msgs = cur ? buildApiMessages().slice(1) : [];
