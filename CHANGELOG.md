@@ -1,5 +1,46 @@
 # Changelog
 
+## 2.10.2
+- **Her first notes are her own.** A fresh vault's Memory, Journal and Storybook notes start in Pandora's voice, as
+  reminders to herself, and a new **Where I Am** note says where she lives, how she uses it and who she begins as.
+  Memory's sections are now "Who I work with" and "How they like things"; vaults made earlier keep their headings and
+  she keeps writing under them.
+- The Heartbeat note and the memory notes no longer say "Jade" in Pandora's vault.
+
+## 2.10.1
+- **Names, not ranks (the People layer).** Pandora's prompts, bridges and messages name the person she's with (from
+  a dossier in `/People/<name>.md`, or the labels in Config) instead of calling anyone "the user" or "the owner". A
+  check in CI keeps rank words out of the built app.
+- **The Vault Tree.** A new chat is a new branch: New branch, Branches, Rename / Copy / Delete this branch.
+- **Context guard** understands "prompt too long; exceeded max context length by N tokens" (Ollama Cloud's wording):
+  it learns the real limit from how far over the prompt went, trims and retries.
+- **A clean stock SOUL.** New installs start from a hand-written character sheet with no permission gates, and she
+  comes with her cat, Mrrowr-murrr. The base prompt no longer says "only offer help when it is wanted".
+- **The Storybook** (Config → Memory, off until you switch it on): each branch is a book and each chat its next scene,
+  in two first-person voices (what happened in the room, and her own thoughts inside), stamped in UTC to the second
+  and tagged with its room. Only what's new goes in, saved secrets are redacted, and facts from a private room stay in
+  that room's book.
+- CI runs the app tests on Ubuntu 24.04: Playwright has no Chromium for Ubuntu 26.04 yet.
+
+## 2.10.0
+Everything Jade Vault adds, through Jade Vault 2.22.1, comes to Pandora in her own words (/Pandora paths, rituals,
+leaves). Every tool and feature that needs a switch has its own and starts **off**: with nothing switched on,
+Pandora behaves as 2.9.9.2.
+- **Simply in:** the Rust core (web pages to Markdown for web_fetch), web_search and web_fetch together, a steady tool
+  list with the tool router, a faster leaf index, one unreadable file no longer breaking every shell command,
+  TensorFlow.js on WebGPU (else WebGL, else the CPU), an offline terminal (xterm in the phone page).
+- **Memory:** embeddings (hybrid search with SQLite FTS5 + sqlite-vec) and ranked memories (keywords + meaning).
+- **App → Voice & senses**, each its own switch:
+  - senses and the Talk button (hands-free voice, wake phrases, vision and transcription models);
+  - look, and models on this device: .tflite (litert, WebGPU by default) and .onnx (onnx, ONNX Runtime);
+  - **usb**: USB devices you plug in and allow, one at a time;
+  - browser, phone and screen (Android app only); Sentry rules and SSH sessions (Android app only);
+  - think (tree of thoughts), delegate (a sub-agent), chat_history (search past chats);
+  - Playbooks (a tab, a tool, schedules and ritual steps), the skill router and tool router, curiosity wake-ups.
+- **App → Background:** scheduled backups to a server (encrypted on the device), and the backup tool.
+- **App:** the vault on real storage, and kiosk mode (Android app only).
+- "Ask me before Pandora places a call, sends a text…" stays on: it guards those tools, which are themselves off.
+
 ## 2.9.9.2
 - **A fantasy companion.** Pandora no longer follows the pointer, and the scanlines and cyber grid are off unless you
   switch them on; she stands in a soft pool of her gem's light. Custom Gradient is now Gradient.

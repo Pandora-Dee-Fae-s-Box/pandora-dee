@@ -149,7 +149,8 @@ ok(await page.evaluate(() => document.body.dataset.screen) === 'files', 'android
 // Shell
 await page.tap('.tab[data-tab="term"]'); await page.waitForTimeout(300);
 for (const c of ['tags', 'search neon', 'links Welcome', 'backlinks Inbox', 'node scripts/vault-stats.js', 'grep -rl "\\[\\[Inbox\\]\\]" /']) { await page.fill('#termCmd', c); await page.press('#termCmd', 'Enter'); await page.waitForTimeout(1500); }
-const termTxt = await page.evaluate(() => document.querySelector('#term').innerText);
+// the whole terminal, scrollback included (xterm keeps only the visible rows in the page)
+const termTxt = await page.evaluate(() => { const t = window.term?._t; if (!t) return document.querySelector('#term').innerText; const b = t.buffer.active; let x = ''; for (let i = 0; i < b.length; i++) x += (b.getLine(i)?.translateToString(true) || '') + '\n'; return x; });
 ok(/#guide\s+3/.test(termTxt), 'shell tags');
 ok(/Project Neon\.md/.test(termTxt), 'shell search');
 ok(/-> \/guides\/Linking Notes\.md/.test(termTxt), 'shell links');
@@ -218,7 +219,7 @@ const mem = await page.evaluate(async () => { const t = async (a) => { try { ret
   r.s3 = await t({ action: 'save', text: 'Their cat is called Byte', section: 'about' });
   r.search = await t({ action: 'search', text: 'cat' });
   r.prompt = systemPrompt(); r.f = await t({ action: 'forget', text: 'cat is called' }); r.after = vfs.read('/Pandora/Memory.md'); return r; });
-ok(/Saved to memory under "Preferences"/.test(mem.s1) && /Already remembered/.test(mem.s2), 'memory save + dedupe');
+ok(/Saved to memory under "How they like things"/.test(mem.s1) && /Already remembered/.test(mem.s2), 'memory save + dedupe');
 ok(/Byte/.test(mem.search), 'memory search');
 ok(/Long-term memory/.test(mem.prompt) && /synthwave/.test(mem.prompt) && /Byte/.test(mem.prompt), 'memory in system prompt');
 ok(/Forgot 1/.test(mem.f) && !/Byte/.test(mem.after) && /synthwave/.test(mem.after), 'memory forget');

@@ -1,22 +1,26 @@
 /* =====================================================================
    LONG-TERM MEMORY
    - /Pandora/Memory.md: durable facts, one bullet per line, under sections.
-     Injected into every chat's instructions; Jade edits it with the memory tool.
+     Injected into every chat's instructions; Pandora edits it with the memory tool.
    - /Pandora/Journal/YYYY-MM-DD.md: episodic memory. When you leave a chat (or it is
      compacted) the model writes a short entry, and new durable facts it noticed
      are added to Memory.md. Both are ordinary notes you can read and edit.
+   - /Pandora/Where I Am.md: her own reminder of where she lives and how she uses it,
+     written once on a fresh vault. Memory, Journal and Storybook start in her voice too.
    ===================================================================== */
-const MEM_PATH = '/Pandora/Memory.md', JOURNAL_DIR = '/Pandora/Journal';
-const MEM_SECTIONS = { about: 'About you', preferences: 'Preferences', projects: 'Projects & people', notes: 'Notes to self', learned: 'Learned from chats' };
+const MEM_PATH = '/Pandora/Memory.md', JOURNAL_DIR = '/Pandora/Journal', WHERE_PATH = '/Pandora/Where I Am.md';
+const MEM_SECTIONS = { about: 'Who I work with', preferences: 'How they like things', projects: 'Projects & people', notes: 'Notes to self', learned: 'Learned from chats' };
+const MEM_LEGACY = { 'Who I work with': 'About you', 'How they like things': 'Preferences' };   // headings in vaults made before 2.10.2
 const MEM_TEMPLATE = `# Memory
 
-Jade reads this note at the start of every chat. Edit it freely: one fact per line.
-She adds to it when you tell her something worth keeping (or say "remember…"), and her
-chat journal in [[Journal]] adds facts it learns. #memory
+I'm Pandora Dee, and this is my memory: I read it at the start of every chat. My [[SOUL]]
+holds who I am; this holds what I learn along the way, one fact per line. I add to it when
+something lasting comes up, my [[Journal]] adds what it notices, and anyone I share this
+vault with can read and edit it. Where I live and how I use it: [[Where I Am]]. #memory
 
-## About you
+## Who I work with
 
-## Preferences
+## How they like things
 
 ## Projects & people
 
@@ -27,8 +31,34 @@ chat journal in [[Journal]] adds facts it learns. #memory
 const memKey = s => String(s).toLowerCase().replace(/\(\d{4}-\d{2}-\d{2}\)/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 function ensureMemory() {
   if (!vfs.isFile(MEM_PATH)) vfs.write(MEM_PATH, MEM_TEMPLATE, { mkdirs: true });
-  if (!vfs.isFile('/Pandora/Journal.md')) vfs.write('/Pandora/Journal.md', `# Journal\n\nJade's diary of past chats, one note per day in the Journal folder. She searches it with the memory tool to recall earlier conversations. #memory\n`, { mkdirs: true });
+  if (!vfs.isFile('/Pandora/Journal.md')) vfs.write('/Pandora/Journal.md', `# Journal\n\nMy quest log: one note a day in the Journal folder, written when a chat ends or goes quiet. What happened, who was there, and the next step. I search it with my memory tool when I want to recall earlier work. #memory\n`, { mkdirs: true });
+  if (!vfs.exists(WHERE_PATH) && !ls.get('whereSeeded', false)) vfs.write(WHERE_PATH, WHERE_SEED, { mkdirs: true });
+  ls.set('whereSeeded', true);
 }
+const WHERE_SEED = `# Where I Am
+
+I live in the Atelier: a workshop that runs right here, in a browser tab or the phone app. My
+leaves are kept on this device. #memory
+
+## What's here
+- **Leaves:** markdown notes, threaded together with links and sigils. The graph shows how they connect.
+- **Branches:** every chat is a branch. Vector and Discord chats each get their own, one per room.
+- **The shell:** a full BusyBox shell over the same files.
+- **My tools:** reading, writing, searching and threading leaves, the web, schedules and rituals, and
+  whatever else is switched on in Config.
+
+## How I remember
+- [[SOUL]] is who I am. I begin there.
+- [[AGENTS]] holds standing instructions for how I work here.
+- [[Memory]] holds lasting facts, one per line. I read it every chat.
+- [[Journal]] is my quest log, a day at a time.
+- [[Storybook]] keeps each branch as a book in two voices, once it's switched on in Config.
+- My skills live in /Pandora/skills, and I load one when its moment comes.
+
+## Who I begin as
+Pandora Dee, fresh from Eorzea, in a new workshop with a new company. Everything I learn from here
+is mine to keep.
+`;
 function memoryLines() {
   if (!vfs.isFile(MEM_PATH)) return [];
   let sec = ''; const out = [];
@@ -47,12 +77,14 @@ function memorySave(text, section) {
   if (dup) return { added: false, msg: `Already remembered: "${dup.text}"` };
   const head = MEM_SECTIONS[section] || (Object.values(MEM_SECTIONS).includes(section) ? section : MEM_SECTIONS.notes);
   const lines = vfs.read(MEM_PATH).split('\n');
-  let i = lines.findIndex(l => new RegExp('^##\\s+' + head.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&') + '\\s*$', 'i').test(l));
+  const heads = [head, MEM_LEGACY[head]].filter(Boolean).map(h => h.replace(/[.*+?^${}()|[\]\\&]/g, '\\$&'));
+  let i = lines.findIndex(l => new RegExp('^##\\s+(' + heads.join('|') + ')\\s*$', 'i').test(l));
   if (i < 0) { lines.push('', '## ' + head); i = lines.length - 1; }
   let j = i + 1; while (j < lines.length && !/^##\s/.test(lines[j])) j++;
   while (j > i + 1 && !lines[j - 1].trim()) j--;   // insert after the section's last bullet
   lines.splice(j, 0, `- ${text} (${todayStr()})`);
   vfs.write(MEM_PATH, lines.join('\n').replace(/\n{3,}/g, '\n\n'));
+  vmemSyncSoon();
   return { added: true, msg: `Saved to memory under "${head}": ${text}` };
 }
 function memoryForget(text) {
@@ -62,6 +94,7 @@ function memoryForget(text) {
   if (hits.length > 3) throw new Error(`${hits.length} memories match "${text}"; be more specific:\n${hits.map(h => '- ' + h.text).join('\n')}`);
   const drop = new Set(hits.map(h => h.line));
   vfs.write(MEM_PATH, vfs.read(MEM_PATH).split('\n').filter(l => !drop.has(l)).join('\n'));
+  vmemSyncSoon();
   return `Forgot ${hits.length}: ${hits.map(h => '"' + h.text + '"').join(', ')}`;
 }
 function memorySearch(query, limit = 15) {
@@ -80,14 +113,20 @@ function memorySearch(query, limit = 15) {
   res.sort((a, b) => b.score - a.score);
   return res.slice(0, limit);
 }
+// search: keywords + meaning together (FTS5 and sqlite-vec, see embed.js) when embeddings work, the plain word match otherwise
+async function memorySearchTool(query) {
+  if (S.embedOn !== false) {
+    try { const r = await memorySearchHybrid(query, 12); if (r.text) return (r.note ? `[${r.note}]\n` : '') + r.text; }
+    catch (e) { console.warn('hybrid memory search failed, using the word match', e); }
+  }
+  const r = memorySearch(query, 15);
+  return r.length ? r.map(x => `${x.f === MEM_PATH ? 'memory' : noteName(x.f)}${x.head && x.f !== MEM_PATH ? ' · ' + x.head : ''}: ${x.line.slice(0, 300)}`).join('\n') : 'Nothing found in memory or the journal. Try notes_search for the rest of the vault.';
+}
 function memoryTool(args) {
   const a = String(args.action || '').toLowerCase();
   if (a === 'save' || a === 'remember' || a === 'add') return memorySave(args.text ?? args.fact ?? args.content, String(args.section || '').toLowerCase()).msg;
   if (a === 'forget' || a === 'remove' || a === 'delete') return memoryForget(args.text ?? args.query);
-  if (a === 'search' || a === 'recall') {
-    const r = memorySearch(args.text ?? args.query ?? '', 15);
-    return r.length ? r.map(x => `${x.f === MEM_PATH ? 'memory' : noteName(x.f)}${x.head && x.f !== MEM_PATH ? ' · ' + x.head : ''}: ${x.line.slice(0, 300)}`).join('\n') : 'Nothing found in memory or the journal. Try notes_search for the rest of the vault.';
-  }
+  if (a === 'search' || a === 'recall') return memorySearchTool(args.text ?? args.query ?? '');
   if (a === 'list' || !a) { ensureMemory(); return vfs.read(MEM_PATH); }
   throw new Error(`unknown action "${a}" (use save, search, forget or list)`);
 }
@@ -160,9 +199,11 @@ function memoryContext() {
   if (S.memoryRag) {
     const K = Math.max(1, Math.min(30, +S.memoryRagK || 8));
     const q = memoryQuery();
-    const { hits, total } = memoryRank(q, K);
+    // embeddings on: the lines ranked by keywords + meaning, worked out before this turn started (memoryPrefetch); otherwise BM25
+    const hy = S.embedOn !== false && vmemCtx.hits && vmemCtx.q === q && vmemCtx.hits.length ? vmemCtx : null;
+    const { hits, total } = hy ? { hits: hy.hits.map(h => ({ text: h.text, sec: h.head })), total: hy.total } : memoryRank(q, K);
     let lines, note;
-    if (hits.length) { lines = hits.map(h => `- ${h.text}${h.sec ? ` [${h.sec}]` : ''}`); note = `the ${hits.length} of ${total} memory lines that best match the user's message`; }
+    if (hits.length) { lines = hits.map(h => `- ${h.text}${h.sec ? ` [${h.sec}]` : ''}`); note = `the ${hits.length} of ${total} memory lines that best match the user's message${hy ? (hy.sem ? ' (keywords and meaning)' : ' (keywords)') : ''}`; }
     else { lines = mem.slice(-5).map(m => `- ${m.text}${m.sec ? ` [${m.sec}]` : ''}`); note = q.trim() ? `nothing matched this message, so the ${lines.length} newest of ${total} lines` : `the ${lines.length} newest of ${total} lines`; }
     return `\n\nLong-term memory (from the note [[Memory]], ${note}; use memory search for anything else, and keep it current with the memory tool):\n${lines.join('\n') || '(empty so far)'}${journal}`;
   }
@@ -178,7 +219,7 @@ function memoryContext() {
 }
 
 /* ---------- journal: summarise a finished chat into episodic memory ---------- */
-const JOURNAL_SYS = `You keep Pandora's diary (her quest log). Pandora is an AI assistant that manages the user's markdown notes vault. Read the chat and reply in exactly this format:
+const JOURNAL_SYS = `You keep Pandora's diary (her quest log). Pandora keeps a markdown notes vault together with {{PERSON_NAME}}. Read the chat and reply in exactly this format:
 
 SUMMARY:
 - 2 to 5 short bullets: what the user wanted, what was done or decided, which notes were created or changed (as [[Note Name]]), anything left open.
@@ -190,6 +231,7 @@ No other text.`;
 const journaling = new Set();
 const jMarks = () => ls.get('journaled', {});
 async function journalSession(sess, { reason = 'leave', summary = null, upto = null } = {}) {
+  storySession(sess, { reason, upto });   // the Storybook (storybook.js), when it's on
   if (!S.journalOn || !sess || !S.model) return;
   const done = jMarks()[sess.id] || 0; const msgs = sess.messages || [];
   const end = upto ?? msgs.length;
@@ -202,7 +244,7 @@ async function journalSession(sess, { reason = 'leave', summary = null, upto = n
     if (!out) {
       let text = transcriptOf(fresh); if (text.length > 14000) text = '[…]\n' + text.slice(-14000);
       const r = await fetch(S.host.replace(/\/+$/, '') + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: S.model, stream: false, think: false, messages: [{ role: 'system', content: JOURNAL_SYS }, { role: 'user', content: `Chat title: ${sess.title}\n\n${text}` }], options: { temperature: 0.2, num_ctx: +S.numCtx } }) });
+        body: JSON.stringify({ model: S.model, stream: false, think: false, messages: [{ role: 'system', content: relFill(JOURNAL_SYS) }, { role: 'user', content: `Chat title: ${sess.title}\n\n${text}` }], options: { temperature: 0.2, num_ctx: +S.numCtx } }) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       out = String((await r.json()).message?.content || '').replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
@@ -213,7 +255,7 @@ async function journalSession(sess, { reason = 'leave', summary = null, upto = n
     const day = todayStr(), p = `${JOURNAL_DIR}/Journal ${day}.md`, t = new Date();
     const entry = `\n## ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')} · ${String(sess.title || 'Chat').replace(/\n/g, ' ').slice(0, 70)}\n${sum}\n`;
     if (!vfs.isFile(p)) vfs.write(p, `# Journal ${day}\n\n#journal · [[Journal]]\n`, { mkdirs: true });
-    vfs.append(p, entry);
+    vfs.append(p, entry); vmemSyncSoon();
     let learned = 0; for (const f of facts) if (memorySave(f, 'learned').added) learned++;
     const marks = jMarks(); marks[sess.id] = end; ls.set('journaled', marks);
     if (reason !== 'quiet') toast(`Pandora wrote today's quest log${learned ? ` and learned ${learned} new thing${learned > 1 ? 's' : ''}` : ''}`, 'ok');
@@ -222,5 +264,5 @@ async function journalSession(sess, { reason = 'leave', summary = null, upto = n
 }
 
 let journalT = null;
-function scheduleJournal() { clearTimeout(journalT); if (!S.journalOn) return; journalT = setTimeout(() => { if (!running && cur) journalSession(cur, { reason: 'quiet' }); }, 4 * 60e3); }
+function scheduleJournal() { clearTimeout(journalT); if (!S.journalOn && !S.storyOn) return; journalT = setTimeout(() => { if (!running && cur) journalSession(cur, { reason: 'quiet' }); }, 4 * 60e3); }
 document.addEventListener('visibilitychange', () => { if (document.hidden && !running && cur) journalSession(cur, { reason: 'quiet' }); });
