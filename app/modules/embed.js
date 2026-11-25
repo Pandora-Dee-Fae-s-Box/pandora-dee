@@ -97,22 +97,81 @@ async function vmemEnsureDim(dim) {      // (re)create the vec0 table when the m
   ] });
   vmemS.dim = dim; vmemS.model = embedModel(); vmemS.dirty = true;
 }
-// embed everything that has no vector yet (batches of 16; a failure keeps the text searchable by keywords)
-async function vmemEmbedPending(progress) {
-  let done = 0;
-  for (;;) {
-    const rows = (await vmemCall('sql', { sql: 'SELECT id, coll, text FROM chunks WHERE emb = 0 ORDER BY id LIMIT 16' }))[0]?.values || [];
-    if (!rows.length) break;
-    const vs = await ollamaEmbed(rows.map(r => r[2]), 'document');
-    await vmemEnsureDim(vs[0].length);
-    await vmemCall('tx', { stmts: rows.flatMap((r, i) => [
-      ['DELETE FROM vec WHERE rowid = ?', [r[0]]],
-      ['INSERT INTO vec(rowid, coll, embedding) VALUES (?, ?, ?)', [r[0], r[1], vmemBlob(vs[i])]],
-      ['UPDATE chunks SET emb = 1 WHERE id = ?', [r[0]]],
-    ]) });
-    vmemS.dirty = true; done += rows.length; progress?.(done);
+// ---- how far embedding is: "Embedding 400 of 2,350 · about 6 min left", wherever you are in the app ----
+const EMBED_SAVE_MS = 30000, EMBED_SHOW_MIN = 32;   // save the index this often while embedding; show progress for runs this big
+function fmtLeft(ms) {
+  if (ms == null || !isFinite(ms)) return '';
+  if (ms < 60000) return 'under a minute left';
+  const m = Math.round(ms / 60000); return m < 90 ? `about ${m} min left` : `about ${Math.floor(m / 60)} h ${m % 60} min left`;
+}
+function embedProgressText(p) {
+  if (p.error) return `Embedding stopped at ${p.done.toLocaleString()} of ${p.total.toLocaleString()}: ${p.error}. The rest is kept and tried again later.`;
+  if (p.end) return `Embedded ${p.done.toLocaleString()} text${p.done === 1 ? '' : 's'}.`;
+  return `Embedding ${p.done.toLocaleString()} of ${p.total.toLocaleString()}` + (p.done ? ` · ${fmtLeft(p.eta)}` : ' · working out how long…');
+}
+function embedProgress(p) {
+  vmemS.progress = p.end || p.error ? null : p;
+  if (p.total < EMBED_SHOW_MIN) return;
+  let chip = document.getElementById('embedChip');
+  if (!chip) {
+    chip = document.createElement('div'); chip.id = 'embedChip'; chip.setAttribute('role', 'status'); chip.setAttribute('aria-live', 'polite');
+    chip.style.cssText = 'position:fixed;left:50%;top:58px;transform:translateX(-50%);z-index:2147483000;max-width:calc(100vw - 32px);padding:4px 12px;border:1px solid #1a2d27;background:#09100e;color:#c2d6ce;font:11px/1.5 var(--f-mono, ui-monospace, monospace);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none';
+    document.body.appendChild(chip);
   }
-  return done;
+  chip.style.top = innerWidth >= 768 ? '16px' : '58px';   // in the header's empty middle on wide screens, just under it on phones
+  clearTimeout(chip._t); chip.hidden = false; chip.textContent = embedProgressText(p); chip.style.borderColor = p.error ? '#ff3d4f' : '#1a2d27';
+  if (p.end || p.error) chip._t = setTimeout(() => { chip.hidden = true; }, p.error ? 9000 : 5000);
+  const st = document.getElementById('embedStatus'); if (st) st.textContent = embedProgressText(p);   // Config → Memory shows it too
+}
+const vmemPendingCount = async () => (await vmemCall('sql', { sql: 'SELECT count(*) FROM chunks WHERE emb = 0' }))[0]?.values?.[0]?.[0] || 0;
+// how a build runs (Config → Memory → Embeddings): texts per request, requests at once, how often progress is saved
+const embedTuning = () => ({
+  batch: Math.max(1, Math.min(512, Math.round(+S.embedBatch) || 16)),
+  parallel: Math.max(1, Math.min(8, Math.round(+S.embedParallel) || 1)),
+  saveMs: +S.embedSaveMs || Math.max(5, Math.min(600, Math.round(+S.embedSaveSecs) || EMBED_SAVE_MS / 1000)) * 1000,   // (S.embedSaveMs: tests shorten it)
+});
+// embed everything that has no vector yet (a failure keeps the text searchable by keywords). Each round sends
+// `parallel` requests of `batch` texts at once; what came back is kept even when one request of the round failed.
+// One pass at a time (a second caller waits, then embeds what's left). It knows how many are waiting and how long is
+// left, shows it (embedProgress, and progress(done, total, msLeft) for the caller), and saves the index as it goes,
+// so closing the page loses at most that much: the rest is picked up on the next start.
+async function vmemEmbedPending(progress) {
+  while (vmemS.embedding) await vmemS.embedding.catch(() => {});
+  const run = (async () => {
+    let done = 0, total = await vmemPendingCount(); if (!total) return 0;
+    const t0 = Date.now(); let saved = t0, eta = null, round = 0;
+    embedProgress({ done, total, eta }); progress?.(done, total, eta);
+    try {
+      for (;;) {
+        const { batch, parallel, saveMs } = embedTuning();   // read each round, so a change applies to a build already running
+        const rows = (await vmemCall('sql', { sql: 'SELECT id, coll, text FROM chunks WHERE emb = 0 ORDER BY id LIMIT ?', params: [batch * parallel] }))[0]?.values || [];
+        if (!rows.length) break;
+        const groups = []; for (let i = 0; i < rows.length; i += batch) groups.push(rows.slice(i, i + batch));
+        const res = await Promise.allSettled(groups.map(g => ollamaEmbed(g.map(r => r[2]), 'document')));
+        const okRows = [], okVecs = []; let failed = null;
+        res.forEach((x, k) => { if (x.status === 'fulfilled') { okRows.push(...groups[k]); okVecs.push(...x.value); } else failed ??= x.reason; });
+        if (okRows.length) {
+          await vmemEnsureDim(okVecs[0].length);
+          await vmemCall('tx', { stmts: okRows.flatMap((r, i) => [
+            ['DELETE FROM vec WHERE rowid = ?', [r[0]]],
+            ['INSERT INTO vec(rowid, coll, embedding) VALUES (?, ?, ?)', [r[0], r[1], vmemBlob(okVecs[i])]],
+            ['UPDATE chunks SET emb = 1 WHERE id = ?', [r[0]]],
+          ]) });
+          vmemS.dirty = true; done += okRows.length;
+        }
+        if (failed) throw failed;
+        // counting what's waiting reads the whole table: do it every 10 rounds (texts added meanwhile count too)
+        let left = Math.max(0, total - done); if (++round % 10 === 0 || !left) { left = await vmemPendingCount(); total = done + left; }
+        eta = left ? left * (Date.now() - t0) / done : 0;
+        embedProgress({ done, total, eta }); progress?.(done, total, eta);
+        if (left && Date.now() - saved >= saveMs) { await vmemPersist(); saved = Date.now(); }
+      }
+    } catch (e) { embedProgress({ done, total, eta, error: e.message || String(e) }); throw e; }
+    embedProgress({ done, total, eta: 0, end: true });
+    return done;
+  })();
+  vmemS.embedding = run;
+  try { return await run; } finally { if (vmemS.embedding === run) vmemS.embedding = null; }
 }
 
 /* ---------- what to index ---------- */

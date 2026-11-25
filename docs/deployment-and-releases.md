@@ -1,15 +1,15 @@
 # Deployment and releases
 
-**Jade Vault 2.9.0** · [Documentation index](README-docs.md)
+**Pandora Dee 2.10.11** · [Documentation index](README-docs.md)
 
 ## Browser deployment
 
-From the root of the Jade Vault 2.9.0 source directory, build with `npm install` followed by `npm run build`. There are two relevant generated pages:
+From the root of the Pandora Dee source directory, build with `npm install` followed by `npm run build`. There are two relevant generated pages:
 
-- `dist/jade-vault.html`: browser/release page; some dependencies are externally loaded.
+- `dist/pandora-dee.html`: browser/release page; some dependencies are externally loaded.
 - `android/proj/assets/index.html`: core rendering dependencies inlined, also suitable as a static-hosted page.
 
-Serve the chosen page from a static host. No Jade application backend is required; model servers, MCP services, and the Vector/Discord bridges are separate systems. HTTPS is recommended, but HTTPS pages cannot generally call plain HTTP model/bridge endpoints because of mixed-content rules. Plan compatible URLs/TLS/CORS instead of weakening browser security.
+Serve the chosen page from a static host. No Pandora application backend is required; model servers, MCP services, and the Vector/Discord bridges are separate systems. HTTPS is recommended, but HTTPS pages cannot generally call plain HTTP model/bridge endpoints because of mixed-content rules. Plan compatible URLs/TLS/CORS instead of weakening browser security.
 
 ### GitHub Pages document root
 
@@ -49,9 +49,9 @@ For APK signing, repository Actions secrets are:
 
 | Secret | Purpose |
 | --- | --- |
-| `JADE_KEYSTORE_B64` | Base64-encoded release keystore |
-| `JADE_KEYSTORE_PASSWORD` | Store/private-key password used by this build |
-| `JADE_KEY_ALIAS` | Alias, conventionally `netrunner` |
+| `PANDORA_KEYSTORE_B64` | Base64-encoded release keystore |
+| `PANDORA_KEYSTORE_PASSWORD` | Store/private-key password used by this build |
+| `PANDORA_KEY_ALIAS` | Alias, conventionally `netrunner` |
 
 Configure secrets through GitHub's secure settings; never add them to source. Base64 is transport encoding, **not encryption**. The workflow decodes the keystore to a temporary runner path, signs, removes the temporary file, creates both bridge kits/checksums, and uploads release assets. Re-running uploads with clobber, so it can replace assets on that release.
 

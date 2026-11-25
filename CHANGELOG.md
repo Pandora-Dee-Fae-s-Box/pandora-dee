@@ -1,5 +1,142 @@
 # Changelog
 
+## Unreleased
+- **A desktop app, with her vault as a real folder.** `desktop/` (Electron) opens the Atelier in its own window. Her
+  vault is a folder you pick on the computer, not the browser's database: every note is an ordinary file there, so
+  bash, a file manager and MCP file tools all see the same `/Pandora/SOUL.md`. The vault's existing disk mode (the
+  Android app's) runs on it unchanged, through the same synchronous bridge. Deleted files, and files a full restore
+  replaces, go to a trash folder beside the vault instead of being removed. The browser keeps working as before.
+  It's an option for whoever wants the Atelier in a window of its own: like any Chromium-based window, its text can
+  look soft at fractional display scaling (115%, 125%…). Firefox, and the native ISLANDS window, draw it crisper.
+- **Moving a browser vault in loses nothing.** When a vault in the browser's database moves into a folder (a full
+  backup restored in the desktop app, or the first start of the Android app's folder vault), a file the folder already
+  has with different contents stays as it is, and the moved version is saved beside it, marked "from the browser".
+  Before, the moved version was dropped. In the desktop app, a full restore into a folder that already has files asks
+  whether to keep them and add the backup's, or to replace them.
+
+## 2.10.11
+- **Fallback models on the same provider.** One Ollama can serve cloud models (through your Ollama account) and local
+  ones, but a fallback used to have to be another *provider*. Config → Model provider now takes a list of fallback
+  models for the provider (comma-separated, in order). When the chosen model hits its usage limit (or its server
+  errors), she goes on with the next model on that same provider before trying another provider. The model that ran
+  out rests (30 minutes for a limit, 5 for an error), and your chosen model comes back by itself once it has rested.
+  Your choice stays the remembered one throughout.
+- **A second Ollama address.** "Second Ollama" is a provider of its own, with its own address and remembered model.
+  When your main Ollama is on another machine (reaching Ollama Cloud for you), the Ollama on this computer can be the
+  fallback, the heartbeat's model or the helper model. Before, both were "Ollama", with one address between them.
+
+## 2.10.10
+- **Send and Abort side by side.** While a turn ran, the one button turned red and said Abort: with text in the box
+  it queued the message, with the box empty it stopped her, which was easy to hit while fixing a queued message. Now a
+  separate red Abort sits next to Send while she's working and only ever stops the turn; Send says Queue during a
+  turn and only ever sends (an empty box does nothing).
+- **Strict models accept the chat history.** Kimi K3 refused requests with "tool message 1 has no resolvable tool
+  name": the history held a tool call without a name (some models or streams leave it out) or a result it couldn't
+  tie to a call. Before the history goes to any provider, a call without a name is left out and its result goes in as
+  a note, every result names its tool, and OpenAI-style tool messages carry the tool's name too. The chat itself
+  isn't changed.
+- **MCP entries that can't work say why, Reconnect included.** Reconnect (the button, `/mcp reconnect <name>`)
+  skipped the check that loading does, so an entry without an address tried to reach "undefined" and blamed CORS.
+  It now shows the real reason, such as "stdio servers (\"command\") cannot run in a browser… use its url". The
+  address may also be written `serverUrl` (Windsurf) or `httpUrl` (Gemini CLI), and a `command` entry that also has a
+  `url` connects through the url.
+
+## 2.10.9
+- **Big backups work.** A backup was made as one giant JSON string of the whole vault and every chat, so with a big
+  vault (thousands of chats, a large vector index) Firefox ran out of memory and the button said "Export failed:
+  undefined". Backups are now written in pieces, one line per file and one per chat: joined it's the same JSON any
+  version opens, but it's never one string (Export everything, Export config, and the scheduled backup to a server).
+  Restoring reads a big backup line by line, through gzip too; a big backup from before this version says why it
+  can't be opened. A failure shows its reason, never "undefined". Copy JSON is offered for backups up to 20 MB.
+- **A quieter, correct browser console.** The web page now has a doctype, so browsers run it in standards mode like
+  the Android page (it ran in quirks mode, where KaTeX warns it doesn't work). PowerShell and Windows batch code
+  blocks (` ```powershell `, ` ```cmd `, ` ```bat `, ` ```ps1 `) fetch their highlight.js language pack the first
+  time one appears and are coloured; any other language highlight.js doesn't know is shown as plain text instead of
+  logging a warning per block. PixiJS no longer points at a source map that isn't shipped.
+- **Tune how the embedding index builds.** Config → Memory → Embeddings has three new fields: texts per request
+  (16 unless set, up to 512), requests at once (1 unless set, up to 8; Ollama runs them together when
+  `OLLAMA_NUM_PARALLEL` allows), and how often progress is saved (every 30 s unless set). A faster embedding server
+  across the network spends far less time waiting on round trips. A change applies to a build already running, from
+  its next round, and when one request of a round fails, what the others brought back is kept. The build also counts
+  what's left less often, so each round has less overhead.
+- **Trajectory export no longer fails in silence.** Export JSONL (and `/traj export`) says at once that it's working,
+  can't be pressed twice, and says why when it fails, where before a failure showed nothing at all: no file, no
+  message. A big log is handed to the file in pieces, one per run, instead of one giant string plus a copy of it,
+  which could run out of memory. A trajectory log that another open copy of the app holds now says so instead of
+  waiting forever, and is tried afresh next time. Downloads keep their file link for a minute, so a big one finishes.
+- **Embedding says how far it is.** Building the vector index (Config → Memory → Test and rebuild, or the
+  background catch-up after memory, journal or notes change) shows a line at the top, wherever you are in the app:
+  "Embedding 400 of 2,350 · about 6 min left", then "Embedded 2,350 texts." Config's status line shows the same. A
+  failure says where it stopped and why. The index is saved every 30 seconds along the way, so closing the page loses
+  at most that much, and the next start embeds only what's left. Two runs at once take turns instead of embedding the
+  same texts twice.
+
+## 2.10.8
+- **Read-only tools run side by side.** When one reply asks for several tools, the read-only ones next to each other
+  (read, notes_search, note_links, web_search, web_fetch, skill, find_skill, decide, tool_search, the MCP resource lists,
+  discord_history, chat_history list/read/search) now run at the same time. Anything that writes or acts (write, edit,
+  bash, ssh, phone, screen, browser, memory, MCP tools, …) still runs on its own, in order, and splits the groups. Cards
+  and results stay in the order she asked. Before, only a reply made entirely of web_search / web_fetch ran together.
+  The delegate sub-agent groups its calls the same way. (As in PDA SEASIDE and Jade Vault 2.20.)
+- **Fix a queued message before it's delivered.** A message sent while she's on a tool run waits in the queue; the
+  note above the message box now lists each one with **Edit** and **✕**. Edit takes it out of the queue and back into
+  the box (in front of anything already typed), so a half-fixed message is never delivered; send it again and it
+  queues again. ✕ drops it. With the box empty, the Up arrow takes back the last queued message.
+- **Search the branches.** A search box above the Branches list finds branches by what was said in them, not just
+  their names: your messages, hers, compaction summaries, and tool calls and their results (file names, repos,
+  commands). Every word must appear, in any order or case. Matching branches keep their order, each with a line around
+  the match; Esc or ✕ clears it. It reads the saved branches directly, so it works without the memory index.
+
+## 2.10.7
+- **Vector: a digest of the rest.** "In channels she answers" has a middle choice: "When named, and a digest of the
+  rest". Being named, replied to or a trigger word, and DMs, are answered right away as before. Every other message in
+  a channel she's in waits, and every so often (Digest every … minutes, 30 unless set; sooner once 40 are waiting)
+  they come to her as one turn, each with who said it, to answer once as a whole or let pass. When she's named, what
+  was waiting in that channel comes along, so she answers with the thread in view. (Filed by Pandora Dee Fae.)
+- **Curiosity: one thread, one entry; loops halted.** Each wake-up now names its subject when she reports. Wake-ups on
+  the same subject within two hours are one thread: the engine keeps one cluster entry for it under
+  /Pandora/Sparks/clusters/, each wake-up a sub-item, and tells her about it at the next wake-up, so she adds to the
+  thread instead of writing another note about it. A third in a row halts the thread whatever the clustering did: it's
+  filed under /Pandora/Sparks/loop-halts/, she leaves one question in Questions.md, and the subject rests for 12 hours.
+  She can tag a wake-up thread "same" or "new", and the engine learns where a thread ends. (Filed by Pandora Dee Fae.)
+- Tests: `vector_digest_test`, `spark_clusters_test`.
+
+## 2.10.6
+- **Chats can be read while a turn runs.** The chat list used to ignore clicks until a turn was done, and with Vector,
+  Discord or the heartbeat on, that's often. Now a click opens the chat to read while the turn carries on in its own
+  chat. Anything sent there waits, and when the turn ends that chat opens and gets it. "Back" returns to the running
+  chat and puts anything unsent back in the box. The list marks the chat being read and the busy one.
+- **web_search says why it failed.** Firefox's "NetworkError" and Safari's "Load failed" now read as blocked, like
+  Chrome's. When nothing answers, it says to check the connection first. If the connection is up, the servers are
+  refusing pages opened on their own (CORS), which Ollama's web search always does and most SearXNG instances do too.
+  Pairing with PDA SEASIDE (Config → Connect), or opening the Atelier inside it, sends the searches through the desktop.
+- Tests: `chat_peek_test`, `search_hint_test`. `JV_CHANNEL=msedge` runs the browser tests on an installed browser.
+
+## 2.10.5
+- **The HTTP API token stays out of backups.** A backup made without "Include API keys" left out every key but that
+  one (Config → Connect → API endpoint). Now it's left out too, and a restore keeps this device's own. Backups made with
+  2.9.9.2 through 2.10.4 still carry it, so keep those files private. A new test (`backup_keys_test`) fails if a
+  key-like setting is ever missing from the list again.
+
+## 2.10.4
+- **Bridges keep to their rooms.** Something typed in the Atelier while Pandora was answering on Vector or Discord
+  went into that channel's chat, and her answer to it was posted to the channel. Now what's typed meanwhile waits and
+  goes to the chat it was typed in; Vector and Discord turns wait while you're typing; and each turn posts only its own
+  chat's reply, to its own channel. (Filed by Pandora Dee Fae.)
+- **Coming from 2.9.9.2?** Everything since is below: the People layer, the Vault Tree, a clean stock SOUL, her first
+  notes in her own voice, the Storybook, the context-guard fix, Jade Vault's additions through 2.22.1 (each off until
+  switched on), and http_request's guards. It opens the same vault: notes, chats, memory and settings carry over. Make
+  a backup first (Config → Backup) all the same.
+
+## 2.10.3
+- **http_request keeps to where it should go.** This device, the home network and a tailnet are out of reach unless
+  the address is listed in Config → Secrets → "Local addresses", so a page Pandora reads can't steer a request at the
+  router, a service on this device or another app's keys.
+- **Secrets tied to their hosts.** A secret can be given hosts (`api.github.com, *.githubusercontent.com`): it's only
+  ever sent there, even when a playbook already filled it in, and it stays out of scripts' `process.env`.
+- **No redirects with a secret in the request**, since a key header would go along to wherever the redirect leads;
+  the result says it redirected instead.
+
 ## 2.10.2
 - **Her first notes are her own.** A fresh vault's Memory, Journal and Storybook notes start in Pandora's voice, as
   reminders to herself, and a new **Where I Am** note says where she lives, how she uses it and who she begins as.

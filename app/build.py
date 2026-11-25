@@ -737,7 +737,7 @@ rep("""      <section class="flex flex-col gap-3">
         <div class="pane-h">History compaction</div>""")
 rep("  $('#sCompactAuto').checked = !!S.compactAuto;", "  $('#sMemoryOn').checked = !!S.memoryOn; $('#sJournalOn').checked = !!S.journalOn; $('#sStoryOn').checked = !!S.storyOn; $('#sMemoryRag').checked = !!S.memoryRag; $('#sMemoryRagK').value = S.memoryRagK || 8;\n  $('#sEmbedOn').checked = S.embedOn !== false; $('#sEmbedModel').value = S.embedModel || ''; $('#sEmbedHost').value = S.embedHost || ''; $('#sEmbedKey').value = S.embedKey || ''; $('#sEmbedNotes').checked = !!S.embedNotes;\n  $('#sCompactAuto').checked = !!S.compactAuto;")
 rep("  Object.assign(S, { jadeShow: $('#sJadeShow').checked,", "  Object.assign(S, { memoryOn: $('#sMemoryOn').checked, journalOn: $('#sJournalOn').checked, storyOn: $('#sStoryOn').checked, memoryRag: $('#sMemoryRag').checked, memoryRagK: Math.max(1, Math.min(30, parseInt($('#sMemoryRagK').value) || 8)), embedOn: $('#sEmbedOn').checked, embedModel: $('#sEmbedModel').value.trim() || 'nomic-embed-text', embedHost: $('#sEmbedHost').value.trim(), embedKey: $('#sEmbedKey').value.trim(), embedNotes: $('#sEmbedNotes').checked });\n  Object.assign(S, { jadeShow: $('#sJadeShow').checked,")
-rep("const closeSettings = () => $('#settings').hidden = true;", "const closeSettings = () => $('#settings').hidden = true;\n$('#btnOpenMemory').onclick = () => { closeSettings(); ensureMemory(); openFile(MEM_PATH, { mode: 'read' }); };\n$('#btnEmbedRebuild').onclick = async () => {\n  const st = $('#embedStatus'); st.textContent = 'Working…';\n  Object.assign(S, { embedOn: $('#sEmbedOn').checked, embedModel: $('#sEmbedModel').value.trim() || 'nomic-embed-text', embedHost: $('#sEmbedHost').value.trim(), embedKey: $('#sEmbedKey').value.trim(), embedNotes: $('#sEmbedNotes').checked });\n  try {\n    const r = await vmemRebuild(n => { st.textContent = `Embedded ${n} texts…`; }); const x = await vmemStatus();\n    st.textContent = (r.error ? 'Problem: ' + r.error + '. ' : 'Works. ') + `sqlite-vec ${x.vec} · ${x.model}${x.dim ? ' (' + x.dim + ')' : ''} · ` + (x.collections.map(c => `${c.name} ${c.embedded}/${c.chunks}`).join(', ') || 'nothing to index yet');\n  } catch (e) { st.textContent = 'Failed: ' + e.message; }\n};")
+rep("const closeSettings = () => $('#settings').hidden = true;", "const closeSettings = () => $('#settings').hidden = true;\n$('#btnOpenMemory').onclick = () => { closeSettings(); ensureMemory(); openFile(MEM_PATH, { mode: 'read' }); };\n$('#btnEmbedRebuild').onclick = async () => {\n  const st = $('#embedStatus'); st.textContent = 'Working…';\n  Object.assign(S, { embedOn: $('#sEmbedOn').checked, embedModel: $('#sEmbedModel').value.trim() || 'nomic-embed-text', embedHost: $('#sEmbedHost').value.trim(), embedKey: $('#sEmbedKey').value.trim(), embedNotes: $('#sEmbedNotes').checked });\n  try {\n    const r = await vmemRebuild((n, total, eta) => { st.textContent = embedProgressText({ done: n, total: total || n, eta }); }); const x = await vmemStatus();\n    st.textContent = (r.error ? 'Problem: ' + r.error + '. ' : 'Works. ') + `sqlite-vec ${x.vec} · ${x.model}${x.dim ? ' (' + x.dim + ')' : ''} · ` + (x.collections.map(c => `${c.name} ${c.embedded}/${c.chunks}`).join(', ') || 'nothing to index yet');\n  } catch (e) { st.textContent = 'Failed: ' + e.message; }\n};")
 rep("  if (!(await vfs.load())) seedFs();", "  if (!(await vfs.load())) seedFs();\n  ensureMemory();")
 rep("Object.assign(window, { vfs, openFile, Graph, noteHist, term, vaultIndex, $ });", "Object.assign(window, { vfs, openFile, Graph, noteHist, term, vaultIndex, $, memoryContext, journalSession, S, systemPrompt, runTool, userShell, Jade, PROV_REST });")
 
@@ -1245,7 +1245,7 @@ rep("      if (!ai) { ai = aiBlock(); chatEl.appendChild(ai); if (m.model) ai.qu
     "      if (!ai) { ai = aiBlock(); chatEl.appendChild(ai); if (m.model) ai.querySelector('[data-model]').textContent = m.model; setWhen(ai, m.ts); }")
 rep("      if (m._error) body.appendChild(errorEl(m._error));\n    }\n  }\n  scrollDown(true);",
     "      if (m._error) body.appendChild(errorEl(m._error));\n      if (m.trajId) { const w = ai.querySelector('[data-when]'); if (m.dur && w.textContent) w.textContent += ' · ' + fmtDur(m.dur); ai.appendChild(rateBar(m)); }\n    }\n  }\n  scrollDown(true);")
-rep("  if (cmd === 'context' || cmd === 'ctx') {", """  if (cmd === 'trajectories' || cmd === 'traj') { if (arg === 'export') { exportTrajectories().then(r => r && toast(`Exported ${r.count} of ${r.of} runs`, 'ok')); return; } openSettings(); setTimeout(() => $('#trajSection').scrollIntoView({ block: 'start' }), 60); return; }
+rep("  if (cmd === 'context' || cmd === 'ctx') {", """  if (cmd === 'trajectories' || cmd === 'traj') { if (arg === 'export') { toast('Exporting the trajectory log…'); exportTrajectories().then(r => r && toast(`Exported ${r.count} of ${r.of} runs`, 'ok'), e => toast(`Export failed: ${esc(e?.message || String(e))}`, 'err')); return; } openSettings(); setTimeout(() => $('#trajSection').scrollIntoView({ block: 'start' }), 60); return; }
   if (cmd === 'context' || cmd === 'ctx') {""")
 s = s.replace("['/context', 'what fills the context'],", "['/context', 'what fills the context'], ['/trajectories', 'fine-tuning log'], ['/trajectories export', 'export the log as JSONL'],", 1)
 rep("<b>/context</b> what fills the context ·", "<b>/context</b> what fills the context · <b>/trajectories</b> [export] fine-tuning log ·")
@@ -1265,11 +1265,15 @@ SECRETS_HTML = """      <section class="flex flex-col gap-3" id="secretSection">
         <div class="pane-h">Secrets (API keys for Jade's HTTP requests)</div>
         <p class="text-sm leading-relaxed text-[#c2d6ce]">Jade writes <code class="text-cy">{{NAME}}</code> in a URL, header or body and the app fills in the value when the request goes out. She never sees the value, so it stays out of chats, the trajectory log and replies (any echo is blanked). Node scripts get them as <code class="text-cy">process.env.NAME</code>.</p>
         <div id="secretList" class="flex flex-col gap-2"></div>
-        <div class="grid gap-2" style="grid-template-columns:minmax(110px,1fr) minmax(140px,2fr) auto">
+        <div class="grid gap-2" style="grid-template-columns:minmax(110px,1fr) minmax(140px,2fr) minmax(140px,2fr) auto">
           <input id="sSecretName" class="field" placeholder="NAME" autocapitalize="characters" autocomplete="off" spellcheck="false">
           <input id="sSecretValue" class="field" type="password" placeholder="value" autocomplete="off">
-          <button type="button" class="btn btn-solid" id="btnSecretAdd">Add</button>
+          <input id="sSecretHosts" class="field" placeholder="only to (api.example.com)" autocapitalize="none" autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-solid" id="btnSecretAdd">Save</button>
         </div>
+        <p class="hint">A secret tied to hosts is only ever sent there, and stays out of scripts. To change an existing one's hosts, press its button, edit the hosts and Save (no value needed).</p>
+        <label class="flex flex-col gap-1"><span class="text-sm text-[#c2d6ce]">Local addresses (this device, the home network or a tailnet aren't reached unless listed here)</span>
+          <input id="sHttpLocal" class="field" placeholder="e.g. 192.168.1.20, homeassistant.local" autocapitalize="none" autocomplete="off" spellcheck="false"></label>
       </section>
 
 """
@@ -1297,7 +1301,7 @@ rep("web_fetch: a => a.url,", "web_fetch: a => a.url, http_request: a => `${(a.m
 rep("    web_fetch: () => `Fetching ${short(a.url)}`,", "    web_fetch: () => `Fetching ${short(a.url)}`, http_request: () => `${(a.method || 'GET').toUpperCase()} ${short(a.url)}`,")
 rep("- web_search / web_fetch: look things up on the web", "- web_search / web_fetch: look things up on the web\\n- http_request: call APIs with any method (POST JSON, forms, auth headers). ${Object.keys(secretsMap()).length ? `Secrets you can use (write them exactly like this, the app fills in the value): ${Object.keys(secretsMap()).map(k => '{{' + k + '}}').join(', ')}` : 'No secrets are saved yet: if an API needs a key, ask the user to add it in Config → Secrets and tell them the NAME to use'}")
 # node: secrets as env, redact echoes, mention fetch/https
-rep("    w.postMessage({ files, dirs, bins, sqliteModule: sqMod, cwd: c.sh.cwd, argv });", "    w.postMessage({ files, dirs, bins, sqliteModule: sqMod, env: { ...secretsMap() }, cwd: c.sh.cwd, argv });")
+rep("    w.postMessage({ files, dirs, bins, sqliteModule: sqMod, cwd: c.sh.cwd, argv });", "    w.postMessage({ files, dirs, bins, sqliteModule: sqMod, env: scriptSecrets(), cwd: c.sh.cwd, argv });")
 rep("  for (const [k, v] of r.out) k === 'o' ? c.o(v) : c.e(v);\n  const W = Object.entries(r.writes || {});", "  for (const [k, v] of r.out) k === 'o' ? c.o(redactSecrets(v)) : c.e(redactSecrets(v));\n  const W = Object.entries(r.writes || {});")
 rep("runs JavaScript in a sandboxed worker with require('fs') (readFileSync, writeFileSync, existsSync, readdirSync, appendFileSync, unlinkSync) and require('path').", "runs JavaScript in a sandboxed worker with require('fs') (readFileSync, writeFileSync, existsSync, readdirSync, appendFileSync, unlinkSync), require('path'), global fetch, require('https'/'http') and Buffer; secrets are in process.env.")
 # images
@@ -1913,7 +1917,12 @@ rep("return { path: full, bytes: vfs.nodes.get(full)?.data.length || 0 };", "ret
 rep("const st = vfs.stat?.(p)?.size ?? vfs.nodes.get(p)?.data?.length ?? 0;", "const st = vfs.stat?.(p)?.size ?? 0;")
 # backups and restores
 rep("""    await dbRestore({ ...(data.db || {}), vfs: entries, pendingSettings: next }, true);   // settings ride along in IndexedDB (durable before reload)""",
-    """    if (vfs.diskOn) { vfs.replace(entries, true); if (!vfs.flush(true)) throw new Error('could not write the restored vault to storage'); await dbRestore({ ...(data.db || {}), pendingSettings: next }, true); }
+    """    // the desktop app, on a folder that already has files: keep them and add the backup's beside them (the move from a browser), or replace them (the old ones go to the trash folder)
+    const mergeIn = vfs.diskOn && vfs.info?.mode === 'desktop' && vfs.nodes.size > 1 && confirm(`This vault folder already has ${[...vfs.nodes.values()].filter(n => !n.dir).length} files.
+
+OK: keep them, and add the backup's files. Where a file is in both, the folder's stays and the backup's is saved beside it, marked "from the browser".
+Cancel: replace them with the backup. The folder's files go to the trash folder beside it.`);
+    if (vfs.diskOn && !mergeIn) { vfs.replace(entries, true); if (!vfs.flush(true)) throw new Error('could not write the restored vault to storage'); await dbRestore({ ...(data.db || {}), pendingSettings: next }, true); }
     else await dbRestore({ ...(data.db || {}), vfs: entries, pendingSettings: next }, true);   // settings ride along in IndexedDB (durable before reload)""")
 rep("await dbRestore({ vfs: [...vfs.nodes.entries()], pendingSettings: next }, false);", "if (vfs.diskOn) { vfs.flush(true); await dbRestore({ pendingSettings: next }, false); } else await dbRestore({ vfs: [...vfs.nodes.entries()], pendingSettings: next }, false);")
 
@@ -2270,11 +2279,28 @@ SEAS_HTML = """      <section data-tab="connect" class="flex flex-col gap-3" id=
 """
 rep("""      <section data-tab="tools" class="flex flex-col gap-3" id="secretSection">""", SEAS_HTML + """      <section data-tab="tools" class="flex flex-col gap-3" id="secretSection">""")
 rep("'sshHosts', 'abToken', 'abPass'];", "'sshHosts', 'abToken', 'abPass', 'seasidePair'];")
+# the HTTP API's token is a key too: a backup without "Include API keys" leaves it out, and a restore keeps this device's own
+rep("'abToken', 'abPass', 'seasidePair'];", "'abToken', 'abPass', 'seasidePair', 'apiToken'];")
 
 # ---------- enhanced: Jade Vault 2.18.2's features, each behind its own switch, all off (app/enhanced_pandora.py) ----------
 exec(open(os.path.join(D, 'enhanced_pandora.py'), encoding='utf-8').read())
 exec(open(os.path.join(D, 'people_layer.py'), encoding='utf-8').read())   # names, not ranks: last, on the finished page
 exec(open(os.path.join(D, 'vault_tree.py'), encoding='utf-8').read())     # a new chat is a new branch
+exec(open(os.path.join(D, 'bridge_rooms.py'), encoding='utf-8').read())   # bridges keep to their rooms
+exec(open(os.path.join(D, 'chat_peek.py'), encoding='utf-8').read())      # read another chat while a turn runs
+exec(open(os.path.join(D, 'search_hint.py'), encoding='utf-8').read())    # web_search says why it failed
+exec(open(os.path.join(D, 'vector_digest.py'), encoding='utf-8').read())  # Vector: a digest of the rest
+exec(open(os.path.join(D, 'spark_clusters.py'), encoding='utf-8').read()) # curiosity: one thread clustered, loops halted
+exec(open(os.path.join(D, 'parallel_tools.py'), encoding='utf-8').read()) # read-only tools asked for together run at once
+exec(open(os.path.join(D, 'queue_edit.py'), encoding='utf-8').read())     # a queued message can be taken back and fixed
+exec(open(os.path.join(D, 'branch_search.py'), encoding='utf-8').read())  # search the branches by what was said in them
+exec(open(os.path.join(D, 'embed_tuning.py'), encoding='utf-8').read())   # texts per request, requests at once, save interval
+exec(open(os.path.join(D, 'console_cleanup.py'), encoding='utf-8').read())  # doctype, PowerShell/batch highlighting, no stray source map
+exec(open(os.path.join(D, 'big_backups.py'), encoding='utf-8').read())     # backups written and read in pieces
+exec(open(os.path.join(D, 'tool_names.py'), encoding='utf-8').read())     # every tool result sent names its tool
+exec(open(os.path.join(D, 'send_button.py'), encoding='utf-8').read())    # Send / Queue / Abort by what's in the box
+exec(open(os.path.join(D, 'second_ollama.py'), encoding='utf-8').read())  # a second Ollama address, as its own provider
+exec(open(os.path.join(D, 'model_fallbacks.py'), encoding='utf-8').read()) # fallback models on the same provider, before another provider
 for bad in ['showPreview', 'schedulePreview', 'prevFrame', 'btnPrevBack', 'btnFilePreview', 'btnFileSave', 'inlineAssets']:
     if bad in s: print('WARN leftover', bad, s.count(bad))
 open(os.path.join(DIST, 'pandora-dee.html'), 'w', encoding='utf-8').write(s)
